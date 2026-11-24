@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Fraud Detection System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Real-Time Fraud Detection Dashboard</h2>
+    <p class="subtitle">Monitor transactions and detect fraudulent activities in real-time</p>
+</div>
+
+<!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📊</div>
+        <div class="stat-content">
+            <h3>Total Transactions</h3>
+            <p class="stat-value">{{ total_transactions|default:0 }}</p>
+            <span class="stat-change">Last 30 days</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">⚠️</div>
+        <div class="stat-content">
+            <h3>Fraud Detected</h3>
+            <p class="stat-value fraud-text">{{ fraud_transactions|default:0 }}</p>
+            <span class="stat-change">{{ fraud_rate }}% fraud rate</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">✅</div>
+        <div class="stat-content">
+            <h3>Legitimate</h3>
+            <p class="stat-value success-text">{{ legitimate_transactions|default:0 }}</p>
+            <span class="stat-change">Verified transactions</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">🔔</div>
+        <div class="stat-content">
+            <h3>Active Alerts</h3>
+            <p class="stat-value warning-text">{{ recent_alerts|length }}</p>
+            <span class="stat-change">Pending review</span>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="charts-section">
+    <div class="chart-card">
+        <h3>Fraud Distribution by Category</h3>
+        <div id="categoryChart"></div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Recent Transaction Activity</h3>
+        <div id="activityChart"></div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Recent Transactions</h3>
+        <a href="/monitoring/" class="btn-secondary">View All</a>
+    </div>
+
+    <div class="table-container">
+        <table class="transactions-table">
+            <thead>
+                <tr>
+                    <th>Transaction ID</th>
+                    <th>Amount</th>
+                    <th>Merchant</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                    <th>Fraud Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transaction in recent_transactions %}
+                <tr class="{% if transaction.is_fraud %}fraud-row{% endif %}">
+                    <td><span class="mono">{{ transaction.transaction_id }}</span></td>
+                    <td class="amount">${{ transaction.amount }}</td>
+                    <td>{{ transaction.merchant_category|title }}</td>
+                    <td>{{ transaction.timestamp|date:"M d, H:i" }}</td>
+                    <td>
+                        {% if transaction.is_fraud %}
+                        <span class="badge badge-danger">FRAUD</span>
+                        {% else %}
+                        <span class="badge badge-success">LEGITIMATE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="fraud-score-bar">
+                            <div class="fraud-score-fill" style="width: {{ transaction.fraud_score|floatformat:0 }}%">
+                            </div>
+                            <span class="fraud-score-text">{{ transaction.fraud_score|floatformat:1 }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="empty-state">
+                        No transactions yet. <a href="/api/load-sample/" onclick="loadSampleData(event)">Load sample
+                            data</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Alerts -->
+{% if recent_alerts %}
+<div class="section-card">
+    <div class="section-header">
+        <h3>🚨 Recent Alerts</h3>
+    </div>
+
+    <div class="alerts-container">
+        {% for alert in recent_alerts %}
+        <div class="alert-item alert-{{ alert.severity }}">
+            <div class="alert-header">
+                <span class="alert-badge">{{ alert.severity|upper }}</span>
+                <span class="alert-time">{{ alert.created_at|timesince }} ago</span>
+            </div>
+            <p class="alert-message">{{ alert.message }}</p>
+            <a href="/monitoring/#{{ alert.transaction.transaction_id }}" class="alert-link">View Transaction →</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+    // Category chart data
+    const categoryData = [
+        {% for item in fraud_by_category %}
+    { category: "{{ item.merchant_category }}", count: { { item.count } } },
+    {% endfor %}
+];
+
+    if (categoryData.length > 0) {
+        const categoryTrace = {
+            x: categoryData.map(d => d.category),
+            y: categoryData.map(d => d.count),
+            type: 'bar',
+            marker: {
+                color: ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe'],
+                line: {
+                    width: 0
+                }
+            }
+        };
+
+        const categoryLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#e0e7ff', family: 'Inter' },
+            xaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.1)' },
+            margin: { t: 20, b: 40, l: 40, r: 20 }
+        };
+
+        Plotly.newPlot('categoryChart', [categoryTrace], categoryLayout, { responsive: true });
+    }
+
+    // Activity chart - sample data
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const activityTrace = {
+        x: hours,
+        y: hours.map(h => Math.floor(Math.random() * 50) + 10),
+        type: 'scatter',
+        mode: 'lines+markers',
+        fill: 'tozeroy',
+        line: { color: '#4facfe', width: 3 },
+        marker: { color: '#00f2fe', size: 6 }
+    };
+
+    const activityLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e0e7ff', family: 'Inter' },
+        xaxis: {
+            gridcolor: 'rgba(255,255,255,0.1)',
+            title: 'Hour of Day'
+        },
+        yaxis: {
+            gridcolor: 'rgba(255,255,255,0.1)',
+            title: 'Transactions'
+        },
+        margin: { t: 20, b: 40, l: 40, r: 20 }
+    };
+
+    Plotly.newPlot('activityChart', [activityTrace], activityLayout, { responsive: true });
+
+    // Load sample data function
+    function loadSampleData(e) {
+        e.preventDefault();
+        if (confirm('This will load sample transaction data. Continue?')) {
+            fetch('/api/load-sample/')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Loaded ${data.transactions_loaded} transactions!`);
+                        location.reload();
+                    }
+                });
+        }
+    }
+</script>
+{% endblock %}

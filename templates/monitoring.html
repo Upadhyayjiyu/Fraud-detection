@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Monitoring - Fraud Detection System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Real-Time Transaction Monitoring</h2>
+    <p class="subtitle">Live feed of all transactions with fraud detection results</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <label>Filter by Status:</label>
+        <select id="statusFilter" onchange="filterTransactions(this.value)">
+            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Transactions</option>
+            <option value="fraud" {% if status_filter == 'fraud' %}selected{% endif %}>Fraud Only</option>
+            <option value="legitimate" {% if status_filter == 'legitimate' %}selected{% endif %}>Legitimate Only</option>
+        </select>
+    </div>
+    <button class="btn-primary" onclick="refreshTransactions()">🔄 Refresh</button>
+</div>
+
+<!-- Transactions Feed -->
+<div class="section-card">
+    <div class="transactions-feed">
+        {% for transaction in transactions %}
+        <div class="transaction-item {% if transaction.is_fraud %}fraud-item{% endif %}"
+            id="{{ transaction.transaction_id }}">
+            <div class="transaction-header">
+                <div class="transaction-id">
+                    <span class="mono">{{ transaction.transaction_id }}</span>
+                    {% if transaction.is_fraud %}
+                    <span class="badge badge-danger">FRAUD DETECTED</span>
+                    {% else %}
+                    <span class="badge badge-success">LEGITIMATE</span>
+                    {% endif %}
+                </div>
+                <div class="transaction-time">{{ transaction.timestamp|date:"M d, Y H:i:s" }}</div>
+            </div>
+
+            <div class="transaction-details">
+                <div class="detail-row">
+                    <div class="detail-item">
+                        <span class="detail-label">Amount</span>
+                        <span class="detail-value amount">${{ transaction.amount }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Merchant</span>
+                        <span class="detail-value">{{ transaction.merchant_category|title }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Device</span>
+                        <span class="detail-value mono">{{ transaction.device_id }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Location</span>
+                        <span class="detail-value">ID: {{ transaction.location_id }}</span>
+                    </div>
+                </div>
+
+                <div class="fraud-analysis">
+                    <span class="detail-label">Fraud Probability</span>
+                    <div class="fraud-score-bar-large">
+                        <div class="fraud-score-fill"
+                            style="width: {{ transaction.fraud_score|floatformat:0 }}%; background: {% if transaction.fraud_score > 70 %}#f5576c{% elif transaction.fraud_score > 40 %}#fee140{% else %}#4facfe{% endif %}">
+                        </div>
+                        <span class="fraud-score-text">{{ transaction.fraud_score|floatformat:1 }}%</span>
+                    </div>
+                </div>
+
+                {% if transaction.is_foreign %}
+                <div class="warning-badge">🌍 Foreign Transaction</div>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state-large">
+            <div class="empty-icon">📭</div>
+            <h3>No Transactions Found</h3>
+            <p>No transactions match your current filters.</p>
+            <a href="/api/load-sample/" onclick="loadSampleData(event)" class="btn-primary">Load Sample Data</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function filterTransactions(status) {
+        window.location.href = `/monitoring/?status=${status}`;
+    }
+
+    function refreshTransactions() {
+        location.reload();
+    }
+
+    function loadSampleData(e) {
+        e.preventDefault();
+        if (confirm('Load sample transaction data?')) {
+            fetch('/api/load-sample/')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Loaded ${data.transactions_loaded} transactions!`);
+                        location.reload();
+                    }
+                });
+        }
+    }
+
+    // Auto-refresh every 30 seconds
+    setTimeout(refreshTransactions, 30000);
+</script>
+{% endblock %}
